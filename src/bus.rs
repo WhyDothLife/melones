@@ -1,11 +1,11 @@
-pub struct bus{
+pub struct Bus{
     cpu_ram: [u8; 2048],
     system_clock_counter: u32
 }
 
-impl bus{
+impl Bus{
     pub fn new() -> Self{
-        let mut b = bus{
+        let mut b = Bus{
             cpu_ram: [0; 2048],
             system_clock_counter: 0
         };

@@ -1,7 +1,7 @@
 use imgui::*;
 
 //For emotional support
-mod clipboard;
+use clipboard;
 
 pub fn guiInit()
 {
