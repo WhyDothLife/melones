@@ -2,6 +2,21 @@ use std::convert::TryInto;
 
 use crate::bus;
 
+// This is copied from FCEU.
+static CYCLE_TABLE: [u8; 256] = [
+    /*0x00*/ 7, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6, /*0x10*/ 2, 5, 2, 8, 4, 4,
+    6, 6, 2, 4, 2, 7, 4, 4, 7, 7, /*0x20*/ 6, 6, 2, 8, 3, 3, 5, 5, 4, 2, 2, 2, 4, 4, 6, 6,
+    /*0x30*/ 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7, /*0x40*/ 6, 6, 2, 8, 3, 3,
+    5, 5, 3, 2, 2, 2, 3, 4, 6, 6, /*0x50*/ 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
+    /*0x60*/ 6, 6, 2, 8, 3, 3, 5, 5, 4, 2, 2, 2, 5, 4, 6, 6, /*0x70*/ 2, 5, 2, 8, 4, 4,
+    6, 6, 2, 4, 2, 7, 4, 4, 7, 7, /*0x80*/ 2, 6, 2, 6, 3, 3, 3, 3, 2, 2, 2, 2, 4, 4, 4, 4,
+    /*0x90*/ 2, 6, 2, 6, 4, 4, 4, 4, 2, 5, 2, 5, 5, 5, 5, 5, /*0xA0*/ 2, 6, 2, 6, 3, 3,
+    3, 3, 2, 2, 2, 2, 4, 4, 4, 4, /*0xB0*/ 2, 5, 2, 5, 4, 4, 4, 4, 2, 4, 2, 4, 4, 4, 4, 4,
+    /*0xC0*/ 2, 6, 2, 8, 3, 3, 5, 5, 2, 2, 2, 2, 4, 4, 6, 6, /*0xD0*/ 2, 5, 2, 8, 4, 4,
+    6, 6, 2, 4, 2, 7, 4, 4, 7, 7, /*0xE0*/ 2, 6, 3, 8, 3, 3, 5, 5, 2, 2, 2, 2, 4, 4, 6, 6,
+    /*0xF0*/ 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
+];
+
 pub struct CPU_6502{
     accum: u8, // Accumulator register
     x: u8,     // X register
@@ -114,16 +129,16 @@ impl CPU_6502{
     pub fn irq(&mut self, bus: &mut bus::Bus){
         if self.get_flag('I') == 0{
             // Push program counter to the stack
-            self.write_this(bus, (0x0100 + self.stkp).into(), ((self.pc >> 8) & 0x00FF).try_into().unwrap());
+            self.write_this(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF).try_into().unwrap());
             self.stkp -= 1;
-            self.write_this(bus, (0x0100 + self.stkp).into(), (self.pc & 0x00FF).try_into().unwrap());
+            self.write_this(bus, 0x0100 + self.stkp as u16, (self.pc & 0x00FF).try_into().unwrap());
             self.stkp -= 1;
 
             // Push status register to the stack
             self.set_flag('B', false);
             self.set_flag('U', true);
             self.set_flag('I', true);
-            self.write_this(bus, (0x0100 + self.stkp).into(), self.status);
+            self.write_this(bus, 0x0100 + self.stkp as u16, self.status);
             self.stkp -= 1;
 
             // Read new program counter location
@@ -138,15 +153,15 @@ impl CPU_6502{
 
     // Non-Maskable Interrupt - cannot be ignored
     pub fn nmi(&mut self, bus: &mut bus::Bus){
-        self.write_this(bus, (0x0100 + self.stkp).into(), ((self.pc >> 8) & 0x00FF).try_into().unwrap());
+        self.write_this(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF).try_into().unwrap());
         self.stkp -= 1;
-        self.write_this(bus, (0x0100 + self.stkp).into(), (self.pc & 0x00FF).try_into().unwrap());
+        self.write_this(bus, 0x0100 + self.stkp as u16, (self.pc & 0x00FF).try_into().unwrap());
         self.stkp -= 1;
 
         self.set_flag('B', false);
         self.set_flag('U', true);
         self.set_flag('I', true);
-        self.write_this(bus, (0x0100 + self.stkp).into(), self.status);
+        self.write_this(bus, 0x0100 + self.stkp as u16, self.status);
         self.stkp -= 1;
 
         self.addr_abs = 0xFFFA;
@@ -163,39 +178,39 @@ impl CPU_6502{
      * 
      **********************************/
      // Implied
-     fn IMP(&mut self) -> u8{
+     fn imp(&mut self) -> u8{
         self.fetched = self.accum;
         return 0;
      }
      // Immediate
-     fn IMM(&mut self) -> u8{
+     fn imm(&mut self) -> u8{
         self.addr_abs = self.pc;
         self.pc += 1;
         return 0;
      }
      // Zero page
-     fn ZP0(&mut self, bus: &bus::Bus) -> u8{
+     fn zp0(&mut self, bus: &bus::Bus) -> u8{
         self.addr_abs = self.read_this(bus, self.pc).into();
         self.pc += 1;
         self.addr_abs &= 0x00FF;
         return 0;
      }
      // Zero page with X offset
-     fn ZPX(&mut self, bus: &bus::Bus) -> u8{
+     fn zpx(&mut self, bus: &bus::Bus) -> u8{
         self.addr_abs = (self.read_this(bus, self.pc) + self.x).into();
         self.pc += 1;
         self.addr_abs &= 0x00FF;
         return 0;
      }
      // Zero page with Y offset
-     fn ZPY(&mut self, bus: &bus::Bus) -> u8{
+     fn zpy(&mut self, bus: &bus::Bus) -> u8{
         self.addr_abs = (self.read_this(bus, self.pc) + self.y).into();
         self.pc += 1;
         self.addr_abs &= 0x00FF;
         return 0;
      }
      // Relative
-     fn REL(&mut self, bus: &bus::Bus) -> u8{
+     fn rel(&mut self, bus: &bus::Bus) -> u8{
         self.addr_abs = self.pc;
         self.pc += 1;
         if self.addr_rel & 0x80 == 1{
@@ -204,7 +219,7 @@ impl CPU_6502{
         return 0;
      }
      // Absolute with X Offset
-     fn ABX(&mut self, bus: &bus::Bus) -> u8{
+     fn abx(&mut self, bus: &bus::Bus) -> u8{
         let lo: u16 = self.read_this(bus, self.pc) .into();
         self.pc += 1;
         let hi: u16 = self.read_this(bus, self.pc) .into();
@@ -220,7 +235,7 @@ impl CPU_6502{
         }
      }
      // Absolute with Y offset
-     fn ABY(&mut self, bus: &bus::Bus) -> u8{
+     fn aby(&mut self, bus: &bus::Bus) -> u8{
         let lo: u16 = self.read_this(bus, self.pc) .into();
         self.pc += 1;
         let hi: u16 = self.read_this(bus, self.pc) .into();
@@ -236,7 +251,7 @@ impl CPU_6502{
         }
      }
      // Indirect
-     fn IND(&mut self, bus: &bus::Bus) -> u8{
+     fn ind(&mut self, bus: &bus::Bus) -> u8{
         let ptr_lo: u16 = self.read_this(bus, self.pc) .into();
         self.pc += 1;
         let ptr_hi: u16 = self.read_this(bus, self.pc) .into();
@@ -244,16 +259,17 @@ impl CPU_6502{
 
         let ptr: u16 = (ptr_hi << 8) | ptr_lo;
 
-        if ptr_lo == 0x00FF{
-            self.addr_abs = ((self.read_this(bus, ptr & 0xFF00) << 8) | self.read_this(bus, ptr + 0)).into();
-        }else{
+        
+        if ptr_lo == 0x00FF{ // Should be fine 
+            self.addr_abs = ((self.read_this(bus, ptr & 0xFF00) >> 8) | self.read_this(bus, ptr + 0)).into();
+        }else{               // Should be fine
             self.addr_abs = ((self.read_this(bus, ptr + 1) << 8) | self.read_this(bus, ptr + 0)).into();
         }
 
         return 0;
      }
      // Indirect X
-     fn IZX(&mut self, bus: &bus::Bus) -> u8{
+     fn izx(&mut self, bus: &bus::Bus) -> u8{
         let t: u16 = self.read_this(bus, self.pc).into();
         self.pc += 1;
 
@@ -265,7 +281,7 @@ impl CPU_6502{
         return 0;
      }
      // Indirect Y
-     fn IZY(&mut self, bus: &bus::Bus) -> u8{
+     fn izy(&mut self, bus: &bus::Bus) -> u8{
         let t: u16 = self.read_this(bus, self.pc).into();
         self.pc += 1;
 
