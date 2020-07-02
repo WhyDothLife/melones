@@ -1,7 +1,7 @@
-mod cpu;
-mod bus;
+//mod cpu;
+//mod bus;
 mod gui;
 
 fn main() {
-    gui::guiInit();
+    gui::guiinit();
 }

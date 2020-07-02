@@ -58,7 +58,7 @@ pub fn init(title: &str) -> System {
             }),
         },
         FontSource::TtfData {
-            data: include_bytes!("Roboto-Regular.ttf"),
+            data: include_bytes!("../../resources/Fonts/Roboto-Regular.ttf"),
             size_pixels: font_size,
             config: Some(FontConfig {
                 rasterizer_multiply: 1.75,
