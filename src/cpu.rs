@@ -1,5 +1,4 @@
 use std::convert::TryInto;
-use std::vec::Vec;
 
 use crate::bus;
 
@@ -15,17 +14,22 @@ use crate::bus;
 
 // This is copied from FCEU.
 static CYCLE_TABLE: [u8; 256] = [
-    /*0x00*/ 7, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6, /*0x10*/ 2, 5, 2, 8, 4, 4,
-    6, 6, 2, 4, 2, 7, 4, 4, 7, 7, /*0x20*/ 6, 6, 2, 8, 3, 3, 5, 5, 4, 2, 2, 2, 4, 4, 6, 6,
-    /*0x30*/ 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7, /*0x40*/ 6, 6, 2, 8, 3, 3,
-    5, 5, 3, 2, 2, 2, 3, 4, 6, 6, /*0x50*/ 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
-    /*0x60*/ 6, 6, 2, 8, 3, 3, 5, 5, 4, 2, 2, 2, 5, 4, 6, 6, /*0x70*/ 2, 5, 2, 8, 4, 4,
-    6, 6, 2, 4, 2, 7, 4, 4, 7, 7, /*0x80*/ 2, 6, 2, 6, 3, 3, 3, 3, 2, 2, 2, 2, 4, 4, 4, 4,
-    /*0x90*/ 2, 6, 2, 6, 4, 4, 4, 4, 2, 5, 2, 5, 5, 5, 5, 5, /*0xA0*/ 2, 6, 2, 6, 3, 3,
-    3, 3, 2, 2, 2, 2, 4, 4, 4, 4, /*0xB0*/ 2, 5, 2, 5, 4, 4, 4, 4, 2, 4, 2, 4, 4, 4, 4, 4,
-    /*0xC0*/ 2, 6, 2, 8, 3, 3, 5, 5, 2, 2, 2, 2, 4, 4, 6, 6, /*0xD0*/ 2, 5, 2, 8, 4, 4,
-    6, 6, 2, 4, 2, 7, 4, 4, 7, 7, /*0xE0*/ 2, 6, 3, 8, 3, 3, 5, 5, 2, 2, 2, 2, 4, 4, 6, 6,
-    /*0xF0*/ 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
+    /*0x00*/ 7, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6, 
+    /*0x10*/ 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7, 
+    /*0x20*/ 6, 6, 2, 8, 3, 3, 5, 5, 4, 2, 2, 2, 4, 4, 6, 6,
+    /*0x30*/ 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7, 
+    /*0x40*/ 6, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 3, 4, 6, 6, 
+    /*0x50*/ 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
+    /*0x60*/ 6, 6, 2, 8, 3, 3, 5, 5, 4, 2, 2, 2, 5, 4, 6, 6, 
+    /*0x70*/ 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7, 
+    /*0x80*/ 2, 6, 2, 6, 3, 3, 3, 3, 2, 2, 2, 2, 4, 4, 4, 4,
+    /*0x90*/ 2, 6, 2, 6, 4, 4, 4, 4, 2, 5, 2, 5, 5, 5, 5, 5, 
+    /*0xA0*/ 2, 6, 2, 6, 3, 3, 3, 3, 2, 2, 2, 2, 4, 4, 4, 4, 
+    /*0xB0*/ 2, 5, 2, 5, 4, 4, 4, 4, 2, 4, 2, 4, 4, 4, 4, 4,
+    /*0xC0*/ 2, 6, 2, 8, 3, 3, 5, 5, 2, 2, 2, 2, 4, 4, 6, 6, 
+    /*0xD0*/ 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7, 
+    /*0xE0*/ 2, 6, 3, 8, 3, 3, 5, 5, 2, 2, 2, 2, 4, 4, 6, 6,
+    /*0xF0*/ 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7
 ];
 
 pub struct CPU_6502{
@@ -89,7 +93,7 @@ impl CPU_6502{
     }
 
     // Read and write a byte to a specific memory address
-    fn read_this(&self, bus: &bus::Bus, a: u16) -> u8{
+    fn read_this(&self, bus: &mut bus::Bus, a: u16) -> u8{
         return bus.cpu_read(a);
     }
     fn write_this(&self, bus: &mut bus::Bus, a: u16, d: u8){
@@ -112,7 +116,7 @@ impl CPU_6502{
         }
     }
 
-    pub fn reset(&mut self, bus: &bus::Bus){
+    pub fn reset(&mut self, bus: &mut bus::Bus){
         // Get address to set program counter
         self.addr_abs = 0xFFFC;
         let lo: u16 = self.read_this(bus, self.addr_abs + 0).into();
@@ -200,28 +204,28 @@ impl CPU_6502{
         return 0;
      }
      // Zero page
-     fn ZP0(&mut self, bus: &bus::Bus) -> u8{
+     fn ZP0(&mut self, bus: &mut bus::Bus) -> u8{
         self.addr_abs = self.read_this(bus, self.pc).into();
         self.pc += 1;
         self.addr_abs &= 0x00FF;
         return 0;
      }
      // Zero page with X offset
-     fn ZPX(&mut self, bus: &bus::Bus) -> u8{
+     fn ZPX(&mut self, bus: &mut bus::Bus) -> u8{
         self.addr_abs = (self.read_this(bus, self.pc) + self.x).into();
         self.pc += 1;
         self.addr_abs &= 0x00FF;
         return 0;
      }
      // Zero page with Y offset
-     fn ZPY(&mut self, bus: &bus::Bus) -> u8{
+     fn ZPY(&mut self, bus: &mut bus::Bus) -> u8{
         self.addr_abs = (self.read_this(bus, self.pc) + self.y).into();
         self.pc += 1;
         self.addr_abs &= 0x00FF;
         return 0;
      }
      // Relative
-     fn REL(&mut self, bus: &bus::Bus) -> u8{
+     fn REL(&mut self, bus: &mut bus::Bus) -> u8{
         self.addr_abs = self.pc;
         self.pc += 1;
         if self.addr_rel & 0x80 == 1{
@@ -230,7 +234,7 @@ impl CPU_6502{
         return 0;
      }
      // Absolute with X Offset
-     fn ABX(&mut self, bus: &bus::Bus) -> u8{
+     fn ABX(&mut self, bus: &mut bus::Bus) -> u8{
         let lo: u16 = self.read_this(bus, self.pc) .into();
         self.pc += 1;
         let hi: u16 = self.read_this(bus, self.pc) .into();
@@ -246,7 +250,7 @@ impl CPU_6502{
         }
      }
      // Absolute with Y offset
-     fn ABY(&mut self, bus: &bus::Bus) -> u8{
+     fn ABY(&mut self, bus: &mut bus::Bus) -> u8{
         let lo: u16 = self.read_this(bus, self.pc) .into();
         self.pc += 1;
         let hi: u16 = self.read_this(bus, self.pc) .into();
@@ -262,7 +266,7 @@ impl CPU_6502{
         }
      }
      // Indirect
-     fn IND(&mut self, bus: &bus::Bus) -> u8{
+     fn IND(&mut self, bus: &mut bus::Bus) -> u8{
         let ptr_lo: u16 = self.read_this(bus, self.pc) .into();
         self.pc += 1;
         let ptr_hi: u16 = self.read_this(bus, self.pc) .into();
@@ -270,17 +274,17 @@ impl CPU_6502{
 
         let ptr: u16 = (ptr_hi << 8) | ptr_lo;
 
-        
+        // Bug in NES
         if ptr_lo == 0x00FF{ // Should be fine 
-            self.addr_abs = ((self.read_this(bus, ptr & 0xFF00) >> 8) | self.read_this(bus, ptr + 0)).into();
+            self.addr_abs = ((self.read_this(bus, ptr & 0xFF00) as u16) >> 8) | (self.read_this(bus, ptr + 0) as u16);
         }else{               // Should be fine
-            self.addr_abs = ((self.read_this(bus, ptr + 1) << 8) | self.read_this(bus, ptr + 0)).into();
+            self.addr_abs = ((self.read_this(bus, ptr + 1) as u16) << 8) | (self.read_this(bus, ptr + 0) as u16);
         }
 
         return 0;
      }
      // Indirect X
-     fn IZX(&mut self, bus: &bus::Bus) -> u8{
+     fn IZX(&mut self, bus: &mut bus::Bus) -> u8{
         let t: u16 = self.read_this(bus, self.pc).into();
         self.pc += 1;
 
@@ -292,7 +296,7 @@ impl CPU_6502{
         return 0;
      }
      // Indirect Y
-     fn IZY(&mut self, bus: &bus::Bus) -> u8{
+     fn IZY(&mut self, bus: &mut bus::Bus) -> u8{
         let t: u16 = self.read_this(bus, self.pc).into();
         self.pc += 1;
 
@@ -308,6 +312,266 @@ impl CPU_6502{
             return 0;
         }
      }
-
     
+     /**************
+     DONT FORGET TO FINISH THIS
+    *************************/
+    // Fetches the data used by the instruction
+    fn fetch(&mut self, bus: &mut bus::Bus) -> u8{
+        // ADD LATER
+        // if addrmode_lookup[self.opcode] == &IMP{
+        //     self.fetched = self.read_this(bus, self.addr_abs);
+        // }
+        return self.fetched;
+    }
+
+    /**********************************
+     * 
+     * Instruction Implementations
+     * 
+     **********************************/
+    // Add with Carry In
+     fn ADC(&mut self, bus: &mut bus::Bus) -> u8{
+        // Grab data for accumulator
+        self.fetch(bus);
+
+        // Performed in 16 bit to capture a carry bit
+        // This will exist in bit 8 of the 16 bit
+        self.temp = (self.accum + self.fetched + self.get_flag('C')) as u16;
+
+        self.set_flag('C', self.temp > 255);
+
+        self.set_flag('Z', (self.temp & 0x00FF) == 0);
+
+        self.set_flag('V', !((self.accum ^ self.fetched) as u16 & (self.accum as u16 ^ self.temp)) & 0x0080 != 0);
+
+        self.set_flag('N', self.temp & 0x80 != 0);
+
+        self.accum = (self.temp & 0x00FF) as u8;
+
+        return 1;
+    }
+    // Subtraction with Borrow In
+    fn SBC(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+
+        let value: u16 = self.fetched as u16 ^ 0x00FF;
+
+        self.temp = self.accum as u16 + value + self.get_flag('C') as u16;
+        self.set_flag('C', (self.temp & 0xFF00) != 0);
+        self.set_flag('Z', (self.temp & 0x00FF) == 0);
+        self.set_flag('V', ((self.temp ^ self.accum as u16) & (self.temp ^ value) & 0x0080) != 0);
+        self.set_flag('N', (self.temp & 0x0080) != 0);
+        self.accum = (self.temp & 0x00FF) as u8;
+        return 1;
+    }
+    // Bitwise Logic AND
+    fn AND(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.accum &= self.fetched;
+        self.set_flag('Z', self.accum == 0x00);
+        self.set_flag('N', self.accum & 0x80 != 0);
+        return 1;
+    }
+    // Arithmetic Shift Left
+    fn ASL(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.temp = (self.fetched << 1) as u16;
+        self.set_flag('C', (self.temp & 0xFF00) > 0);
+        self.set_flag('Z', (self.temp & 0x00FF) == 0x00);
+        self.set_flag('N', (self.temp & 0x80) != 0);
+        // ADD LATER
+        // if addrmode_lookup[self.opcode] == &IMP{
+        //     self.fetched = self.read_this(bus, self.addr_abs);
+        // }else{
+        //     self.write_this(bus, self.addr_abs, self.temp & 0x00FF);
+        // }
+        return 0;
+    }
+    // Branch if Carry Clear
+    fn BCC(&mut self, bus: &mut bus::Bus) -> u8{
+        if self.get_flag('C') == 0{
+            self.cycles += 1;
+            self.addr_abs = self.pc + self.addr_rel;
+
+            if (self.addr_abs & 0xFF00) != (self.pc & 0xFF00){
+                self.cycles += 1;
+            }
+
+            self.pc = self.addr_abs;
+        }
+        return 0;
+    }
+    // Branch if Carry Set
+    fn BCS(&mut self, bus: &mut bus::Bus) -> u8{
+        if self.get_flag('C') == 1{
+            self.cycles += 1;
+            self.addr_abs = self.pc + self.addr_rel;
+
+            if (self.addr_abs & 0xFF00) != (self.pc & 0xFF00){
+                self.cycles += 1;
+            }
+
+            self.pc = self.addr_abs;
+        }
+        return 0;
+    }
+    // Branch if equal
+    fn BEQ(&mut self, bus: &mut bus::Bus) -> u8{
+        if self.get_flag('Z') == 1{
+            self.cycles += 1;
+            self.addr_abs = self.pc + self.addr_rel;
+
+            if (self.addr_abs & 0xFF00) != (self.pc & 0xFF00){
+                self.cycles += 1;
+            }
+
+            self.pc = self.addr_abs;
+        }
+        return 0;
+    }
+    // 
+    fn BIT(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.temp = (self.accum & self.fetched) as u16;
+        self.set_flag('Z', (self.temp & 0x00FF) == 0x00);
+        self.set_flag('N', (self.fetched & (1 << 7)) != 0);
+        self.set_flag('V', (self.fetched & (1 << 6)) != 0);
+        return 0;
+    }
+    // Branch if Negative
+    fn BMI(&mut self, bus: &mut bus::Bus) -> u8{
+        if self.get_flag('N') == 1{
+            self.cycles += 1;
+            self.addr_abs = self.pc + self.addr_rel;
+
+            if (self.addr_abs & 0xFF00) != (self.pc & 0xFF00){
+                self.cycles += 1;
+            }
+
+            self.pc = self.addr_abs;
+        }
+        return 0;
+    }
+    // Branch if Not Equal
+    fn BNE(&mut self, bus: &mut bus::Bus) -> u8{
+        if self.get_flag('Z') == 0{
+            self.cycles += 1;
+            self.addr_abs = self.pc + self.addr_rel;
+
+            if (self.addr_abs & 0xFF00) != (self.pc & 0xFF00){
+                self.cycles += 1;
+            }
+
+            self.pc = self.addr_abs;
+        }
+        return 0;
+    }
+    // Branch if Positive
+    fn BPL(&mut self, bus: &mut bus::Bus) -> u8{
+        if self.get_flag('N') == 1{
+            self.cycles += 1;
+            self.addr_abs = self.pc + self.addr_rel;
+
+            if (self.addr_abs & 0xFF00) != (self.pc & 0xFF00){
+                self.cycles += 1;
+            }
+
+            self.pc = self.addr_abs;
+        }
+        return 0;
+    }
+    // Break
+    fn BRK(&mut self, bus: &mut bus::Bus) -> u8{
+        self.pc += 1;
+
+        self.set_flag('I', true);
+        self.write_this(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
+        self.stkp -= 1;
+        self.write_this(bus, 0x0100 + self.stkp as u16, (self.pc & 0x00FF) as u8);
+        self.stkp -= 1;
+
+        self.set_flag('B', true);
+        self.write_this(bus, 0x0100 + self.stkp as u16, self.status);
+        self.stkp -= 1;
+        self.set_flag('B', false);
+
+        self.pc = (self.read_this(bus, 0xFFFE) | ((self.read_this(bus, 0xFFFF) as u16) << 8) as u8) as u16;
+        return 0;
+    }
+    // Branch if Overflow Clear
+    fn BVC(&mut self, bus: &mut bus::Bus) -> u8{
+        if self.get_flag('V') == 0{
+            self.cycles += 1;
+            self.addr_abs = self.pc + self.addr_rel;
+
+            if (self.addr_abs & 0xFF00) != (self.pc & 0xFF00){
+                self.cycles += 1;
+            }
+
+            self.pc = self.addr_abs;
+        }
+        return 0;
+    }
+    // Branch if Overflow Set
+    fn BVS(&mut self, bus: &mut bus::Bus) -> u8{
+        if self.get_flag('V') == 1{
+            self.cycles += 1;
+            self.addr_abs = self.pc + self.addr_rel;
+
+            if (self.addr_abs & 0xFF00) != (self.pc & 0xFF00){
+                self.cycles += 1;
+            }
+
+            self.pc = self.addr_abs;
+        }
+        return 0;
+    }
+    // Clear Carry Flag
+    fn CLC(&mut self, bus: &mut bus::Bus) -> u8{
+        self.set_flag('C', false);
+        return 0;
+    }
+    // Clear Decimal Flag
+    fn CLD(&mut self, bus: &mut bus::Bus) -> u8{
+        self.set_flag('D', false);
+        return 0;
+    }
+    // Disable Interrupts / Clear Interrupt Flag
+    fn CLI(&mut self, bus: &mut bus::Bus) -> u8{
+        self.set_flag('I', false);
+        return 0;
+    }
+    // Clear Overflow Flag
+    fn CLV(&mut self, bus: &mut bus::Bus) -> u8{
+        self.set_flag('V', false);
+        return 0;
+    }
+    // Compare Accumulator
+    fn CMP(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.temp = (self.accum - self.fetched) as u16;
+        self.set_flag('C', self.accum >= self.fetched);
+        self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
+        self.set_flag('N', (self.temp & 0x0080) != 0);
+        return 1;
+    }
+    // Compare X Register
+    fn CPX(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.temp = (self.x - self.fetched) as u16;
+        self.set_flag('C', self.x >= self.fetched);
+        self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
+        self.set_flag('N', (self.temp & 0x0080) != 0);
+        return 0;
+    }
+    // Compare Y Register
+    fn CPY(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.temp = (self.y - self.fetched) as u16;
+        self.set_flag('C', self.y >= self.fetched);
+        self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
+        self.set_flag('N', (self.temp & 0x0080) != 0);
+        return 1;
+    }
 }
