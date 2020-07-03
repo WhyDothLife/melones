@@ -574,4 +574,140 @@ impl CPU_6502{
         self.set_flag('N', (self.temp & 0x0080) != 0);
         return 1;
     }
+    // Decrement Value at Memory Location
+    fn DEC(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.temp = (self.fetched - 1) as u16;
+        self.write_this(bus, self.addr_abs, (self.temp & 0x00FF) as u8);
+        self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
+        self.set_flag('N', (self.temp & 0x0080) != 0);
+        return 1;
+    }
+    // Decrement X Register
+    fn DEX(&mut self, bus: &mut bus::Bus) -> u8{
+        self.x -= 1;
+        self.set_flag('Z', self.x == 0x00);
+        self.set_flag('N', (self.x & 0x80) != 0);
+        return 0;
+    }
+    // Decrement Y Register
+    fn DEY(&mut self, bus: &mut bus::Bus) -> u8{
+        self.y -= 1;
+        self.set_flag('Z', self.y == 0x00);
+        self.set_flag('N', (self.y & 0x80) != 0);
+        return 0;
+    }
+    // Bitwise Logic XOR
+    fn EOR(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.accum = self.accum ^ self.fetched;
+        self.set_flag('Z', self.accum == 0x00);
+        self.set_flag('N', (self.accum & 0x80) != 0);
+        return 1;
+    }
+    // Increment Value at Memory Location
+    fn INC(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.temp = (self.fetched + 1) as u16;
+        self.write_this(bus, self.addr_abs, (self.temp & 0x00FF) as u8);
+        self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
+        self.set_flag('N', (self.temp& 0x0080) != 0);
+        return 0;
+    }
+    // Increment X Register
+    fn INX(&mut self, bus: &mut bus::Bus) -> u8{
+        self.x += 1;
+        self.set_flag('Z', self.x == 0x00);
+        self.set_flag('N', (self.x & 0x80) != 0);
+        return 0;
+    }
+    // Increment Y Register
+    fn INY(&mut self, bus: &mut bus::Bus) -> u8{
+        self.y += 1;
+        self.set_flag('Z', self.y == 0x00);
+        self.set_flag('N', (self.y & 0x80) != 0);
+        return 0;
+    }
+    // Jump To Location
+    fn JMP(&mut self, bus: &mut bus::Bus) -> u8{
+        self.pc = self.addr_abs;
+        return 0;
+    }
+    // Jump To Location
+    fn JSR(&mut self, bus: &mut bus::Bus) -> u8{
+        self.pc -= 1;
+
+        self.write_this(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
+        self.stkp -= 1;
+        self.write_this(bus, 0x0100 + self.stkp as u16, (self.pc & 0x00FF) as u8);
+        self.stkp -= 1;
+
+        self.pc = self.addr_abs;
+        return 0;
+    }
+    // Load The Accumulator
+    fn LDA(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.accum = self.fetched;
+        self.set_flag('Z', self.accum == 0x00);
+        self.set_flag('N', (self.accum & 0x80) != 0);
+        return 1;
+    }
+    // Load The X Register
+    fn LDX(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.x = self.fetched;
+        self.set_flag('Z', self.x == 0x00);
+        self.set_flag('N', (self.x & 0x80) != 0);
+        return 1;
+    }
+    // Load The Y Register
+    fn LDY(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.y = self.fetched;
+        self.set_flag('Z', self.y == 0x00);
+        self.set_flag('N', (self.y & 0x80) != 0);
+        return 1;
+    }
+    
+    fn LSR(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.set_flag('C', (self.fetched & 0x0001) != 0);
+        self.temp = (self.fetched >> 1) as u16;
+        self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
+        self.set_flag('N', (self.temp & 0x0080) != 0);
+
+        // if addrmode_lookup[self.opcode] == &IMP{
+        //     self.accum = self.temp & 0x00FF;
+        // }else{
+        //     self.write_this(bus, self.addr_abs, (self.temp & 0x00FF) as u8);
+        // }
+        return 0;
+    }
+
+    fn NOP(&mut self, bus: &mut bus::Bus) -> u8{
+        match self.opcode{
+            0x1C|
+            0x3C|
+            0x5C|
+            0x7C|
+            0xDC|
+            0xFC => {return 1;}
+            _ => {return 0;}
+        }
+    }
+    // Bitwise Logic OR
+    fn ORA(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.accum = self.accum | self.fetched;
+        self.set_flag('Z', self.accum == 0x00);
+        self.set_flag('N', (self.accum & 0x80) != 0);
+        return 1;
+    }
+    // Push Accumulator to Stack
+    fn PHA(&mut self, bus: &mut bus::Bus) -> u8{
+        self.write_this(bus, 0x0100 + self.stkp as u16, self.accum);
+        self.stkp -= 1;
+        return 0;
+    }
 }
