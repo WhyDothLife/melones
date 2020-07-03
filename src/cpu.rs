@@ -1,6 +1,17 @@
 use std::convert::TryInto;
+use std::vec::Vec;
 
 use crate::bus;
+
+// enum INSTRUCTION{
+//     name,
+//     operate,
+//     addrmode,
+// }
+
+// static lookup: vec!(INSTRUCTION) = {
+
+// }
 
 // This is copied from FCEU.
 static CYCLE_TABLE: [u8; 256] = [
@@ -178,39 +189,39 @@ impl CPU_6502{
      * 
      **********************************/
      // Implied
-     fn imp(&mut self) -> u8{
+     fn IMP(&mut self) -> u8{
         self.fetched = self.accum;
         return 0;
      }
      // Immediate
-     fn imm(&mut self) -> u8{
+     fn IMM(&mut self) -> u8{
         self.addr_abs = self.pc;
         self.pc += 1;
         return 0;
      }
      // Zero page
-     fn zp0(&mut self, bus: &bus::Bus) -> u8{
+     fn ZP0(&mut self, bus: &bus::Bus) -> u8{
         self.addr_abs = self.read_this(bus, self.pc).into();
         self.pc += 1;
         self.addr_abs &= 0x00FF;
         return 0;
      }
      // Zero page with X offset
-     fn zpx(&mut self, bus: &bus::Bus) -> u8{
+     fn ZPX(&mut self, bus: &bus::Bus) -> u8{
         self.addr_abs = (self.read_this(bus, self.pc) + self.x).into();
         self.pc += 1;
         self.addr_abs &= 0x00FF;
         return 0;
      }
      // Zero page with Y offset
-     fn zpy(&mut self, bus: &bus::Bus) -> u8{
+     fn ZPY(&mut self, bus: &bus::Bus) -> u8{
         self.addr_abs = (self.read_this(bus, self.pc) + self.y).into();
         self.pc += 1;
         self.addr_abs &= 0x00FF;
         return 0;
      }
      // Relative
-     fn rel(&mut self, bus: &bus::Bus) -> u8{
+     fn REL(&mut self, bus: &bus::Bus) -> u8{
         self.addr_abs = self.pc;
         self.pc += 1;
         if self.addr_rel & 0x80 == 1{
@@ -219,7 +230,7 @@ impl CPU_6502{
         return 0;
      }
      // Absolute with X Offset
-     fn abx(&mut self, bus: &bus::Bus) -> u8{
+     fn ABX(&mut self, bus: &bus::Bus) -> u8{
         let lo: u16 = self.read_this(bus, self.pc) .into();
         self.pc += 1;
         let hi: u16 = self.read_this(bus, self.pc) .into();
@@ -235,7 +246,7 @@ impl CPU_6502{
         }
      }
      // Absolute with Y offset
-     fn aby(&mut self, bus: &bus::Bus) -> u8{
+     fn ABY(&mut self, bus: &bus::Bus) -> u8{
         let lo: u16 = self.read_this(bus, self.pc) .into();
         self.pc += 1;
         let hi: u16 = self.read_this(bus, self.pc) .into();
@@ -251,7 +262,7 @@ impl CPU_6502{
         }
      }
      // Indirect
-     fn ind(&mut self, bus: &bus::Bus) -> u8{
+     fn IND(&mut self, bus: &bus::Bus) -> u8{
         let ptr_lo: u16 = self.read_this(bus, self.pc) .into();
         self.pc += 1;
         let ptr_hi: u16 = self.read_this(bus, self.pc) .into();
@@ -269,7 +280,7 @@ impl CPU_6502{
         return 0;
      }
      // Indirect X
-     fn izx(&mut self, bus: &bus::Bus) -> u8{
+     fn IZX(&mut self, bus: &bus::Bus) -> u8{
         let t: u16 = self.read_this(bus, self.pc).into();
         self.pc += 1;
 
@@ -281,7 +292,7 @@ impl CPU_6502{
         return 0;
      }
      // Indirect Y
-     fn izy(&mut self, bus: &bus::Bus) -> u8{
+     fn IZY(&mut self, bus: &bus::Bus) -> u8{
         let t: u16 = self.read_this(bus, self.pc).into();
         self.pc += 1;
 
@@ -297,4 +308,6 @@ impl CPU_6502{
             return 0;
         }
      }
+
+    
 }
