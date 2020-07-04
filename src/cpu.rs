@@ -710,4 +710,81 @@ impl CPU_6502{
         self.stkp -= 1;
         return 0;
     }
+    // Push Status Register to Stack
+    fn PHP(&mut self, bus: &mut bus::Bus) -> u8{
+        self.write_this(bus, 0x0100 + self.stkp as u16, self.status | FLAGS_6502('B') | FLAGS_6502('U'));
+        self.set_flag('B', false);
+        self.set_flag('U', false);
+        self.stkp -= 1;
+        return 0;
+    }
+    // Pop Accumulator off Stack
+    fn PLA(&mut self, bus: &mut bus::Bus) -> u8{
+        self.stkp += 1;
+        self.accum = self.read_this(bus, 0x0100 + self.stkp as u16);
+        self.set_flag('Z', self.accum == 0x00);
+        self.set_flag('N', (self.accum & 0x80) != 0);
+        return 0;
+    }
+    // Pop Status Register off Stack
+    fn PLP(&mut self, bus: &mut bus::Bus) -> u8{
+        self.stkp += 1;
+        self.status = self.read_this(bus, 0x0100 + self.stkp as u16);
+        self.set_flag('U', true);
+        return 0;
+    }
+
+    fn ROL(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.temp = ((self.fetched << 1) | self.get_flag('C')) as u16;
+        self.set_flag('C', (self.temp & 0xFF00) != 0);
+        self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
+        self.set_flag('N', (self.temp & 0x0080) != 0);
+        
+        // if addrmode_lookup[self.opcode] == &IMP{
+        //     self.accum = (self.temp & 0x00FF) as u8;
+        // }else{
+        //     self.write_this(bus, self.addr_abs, (self.temp & 0x00FF) as u8);
+        // }
+        return 0;
+    }
+
+    fn ROR(&mut self, bus: &mut bus::Bus) -> u8{
+        self.fetch(bus);
+        self.temp = ((self.get_flag('C') << 7) | (self.fetched >> 1)) as u16;
+        self.set_flag('C', (self.fetched & 0x01) != 0);
+        self.set_flag('Z', (self.temp & 0x00FF) == 0x00);
+        self.set_flag('N', (self.temp & 0x0080) != 0);
+        
+        // if addrmode_lookup[self.opcode] == &IMP{
+        //     self.accum = (self.temp & 0x00FF) as u8;
+        // }else{
+        //     self.write_this(bus, self.addr_abs, (self.temp & 0x00FF) as u8);
+        // }
+        return 0;
+    }
+
+    fn RTI(&mut self, bus: &mut bus::Bus) -> u8{
+        self.stkp += 1;
+        self.status = self.read_this(bus, 0x0100 + self.stkp as u16);
+        self.status &= !FLAGS_6502('B');
+        self.status &= !FLAGS_6502('U');
+
+        self.stkp += 1;
+        self.pc = self.read_this(bus, 0x0100 + self.stkp as u16) as u16;
+        self.stkp += 1;
+        self.pc |= self.read_this(bus, (0x0100 + self.stkp as u16) << 8) as u16;
+        return 0;
+    }
+
+    fn RTS(&mut self, bus: &mut bus::Bus) -> u8{
+        self.stkp += 1;
+        self.pc = self.read_this(bus, 0x0100 + self.stkp as u16) as u16;
+        self.stkp += 1;
+        self.pc |= self.read_this(bus, (0x0100 + self.stkp as u16) << 8) as u16;
+
+        self.pc += 1;
+        return 0;
+    }
+    
 }
