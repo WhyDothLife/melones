@@ -1,3 +1,7 @@
+#![allow(dead_code)]
+#![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
+
 use std::convert::TryInto;
 
 use crate::bus;
@@ -61,20 +65,21 @@ pub struct CPU_6502{
 
 fn FLAGS_6502(c: char) -> u8{
     match c{
-        C => (1 << 0),	// Carry Bit
-	    Z => (1 << 1),	// Zero
-	    I => (1 << 2),	// Disable Interrupts
-	    D => (1 << 3),	// Decimal Mode (unused by NES)
-	    B => (1 << 4),	// Break
-	    U => (1 << 5),	// Unused
-	    V => (1 << 6),	// Overflow
-	    N => (1 << 7),	// Negative
+        'C' => return 1 << 0,	// Carry Bit
+	    'Z' => return 1 << 1,	// Zero
+	    'I' => return 1 << 2,	// Disable Interrupts
+	    'D' => return 1 << 3,	// Decimal Mode (unused by NES)
+	    'B' => return 1 << 4,	// Break
+	    'U' => return 1 << 5,	// Unused
+	    'V' => return 1 << 6,	// Overflow
+        'N' => return 1 << 7,	// Negative
+         _  => {println!("{}", 0); return 0;}
     }
 }
 
 impl CPU_6502{
     pub fn new() -> Self{
-        let mut cpu = CPU_6502{
+        let cpu = CPU_6502{
             accum: 0,
             x: 0,
             y: 0,
@@ -225,7 +230,7 @@ impl CPU_6502{
         return 0;
      }
      // Relative
-     fn REL(&mut self, bus: &mut bus::Bus) -> u8{
+     fn REL(&mut self) -> u8{
         self.addr_abs = self.pc;
         self.pc += 1;
         if self.addr_rel & 0x80 == 1{
@@ -317,7 +322,7 @@ impl CPU_6502{
      DONT FORGET TO FINISH THIS
     *************************/
     // Fetches the data used by the instruction
-    fn fetch(&mut self, bus: &mut bus::Bus) -> u8{
+    fn fetch(&mut self, _bus: &mut bus::Bus) -> u8{
         // ADD LATER
         // if addrmode_lookup[self.opcode] == &IMP{
         //     self.fetched = self.read_this(bus, self.addr_abs);
@@ -389,7 +394,7 @@ impl CPU_6502{
         return 0;
     }
     // Branch if Carry Clear
-    fn BCC(&mut self, bus: &mut bus::Bus) -> u8{
+    fn BCC(&mut self) -> u8{
         if self.get_flag('C') == 0{
             self.cycles += 1;
             self.addr_abs = self.pc + self.addr_rel;
@@ -403,7 +408,7 @@ impl CPU_6502{
         return 0;
     }
     // Branch if Carry Set
-    fn BCS(&mut self, bus: &mut bus::Bus) -> u8{
+    fn BCS(&mut self) -> u8{
         if self.get_flag('C') == 1{
             self.cycles += 1;
             self.addr_abs = self.pc + self.addr_rel;
@@ -417,7 +422,7 @@ impl CPU_6502{
         return 0;
     }
     // Branch if equal
-    fn BEQ(&mut self, bus: &mut bus::Bus) -> u8{
+    fn BEQ(&mut self) -> u8{
         if self.get_flag('Z') == 1{
             self.cycles += 1;
             self.addr_abs = self.pc + self.addr_rel;
@@ -440,7 +445,7 @@ impl CPU_6502{
         return 0;
     }
     // Branch if Negative
-    fn BMI(&mut self, bus: &mut bus::Bus) -> u8{
+    fn BMI(&mut self) -> u8{
         if self.get_flag('N') == 1{
             self.cycles += 1;
             self.addr_abs = self.pc + self.addr_rel;
@@ -454,7 +459,7 @@ impl CPU_6502{
         return 0;
     }
     // Branch if Not Equal
-    fn BNE(&mut self, bus: &mut bus::Bus) -> u8{
+    fn BNE(&mut self) -> u8{
         if self.get_flag('Z') == 0{
             self.cycles += 1;
             self.addr_abs = self.pc + self.addr_rel;
@@ -468,7 +473,7 @@ impl CPU_6502{
         return 0;
     }
     // Branch if Positive
-    fn BPL(&mut self, bus: &mut bus::Bus) -> u8{
+    fn BPL(&mut self) -> u8{
         if self.get_flag('N') == 1{
             self.cycles += 1;
             self.addr_abs = self.pc + self.addr_rel;
@@ -500,7 +505,7 @@ impl CPU_6502{
         return 0;
     }
     // Branch if Overflow Clear
-    fn BVC(&mut self, bus: &mut bus::Bus) -> u8{
+    fn BVC(&mut self) -> u8{
         if self.get_flag('V') == 0{
             self.cycles += 1;
             self.addr_abs = self.pc + self.addr_rel;
@@ -514,7 +519,7 @@ impl CPU_6502{
         return 0;
     }
     // Branch if Overflow Set
-    fn BVS(&mut self, bus: &mut bus::Bus) -> u8{
+    fn BVS(&mut self) -> u8{
         if self.get_flag('V') == 1{
             self.cycles += 1;
             self.addr_abs = self.pc + self.addr_rel;
@@ -528,22 +533,22 @@ impl CPU_6502{
         return 0;
     }
     // Clear Carry Flag
-    fn CLC(&mut self, bus: &mut bus::Bus) -> u8{
+    fn CLC(&mut self) -> u8{
         self.set_flag('C', false);
         return 0;
     }
     // Clear Decimal Flag
-    fn CLD(&mut self, bus: &mut bus::Bus) -> u8{
+    fn CLD(&mut self) -> u8{
         self.set_flag('D', false);
         return 0;
     }
     // Disable Interrupts / Clear Interrupt Flag
-    fn CLI(&mut self, bus: &mut bus::Bus) -> u8{
+    fn CLI(&mut self) -> u8{
         self.set_flag('I', false);
         return 0;
     }
     // Clear Overflow Flag
-    fn CLV(&mut self, bus: &mut bus::Bus) -> u8{
+    fn CLV(&mut self) -> u8{
         self.set_flag('V', false);
         return 0;
     }
@@ -584,14 +589,14 @@ impl CPU_6502{
         return 1;
     }
     // Decrement X Register
-    fn DEX(&mut self, bus: &mut bus::Bus) -> u8{
+    fn DEX(&mut self) -> u8{
         self.x -= 1;
         self.set_flag('Z', self.x == 0x00);
         self.set_flag('N', (self.x & 0x80) != 0);
         return 0;
     }
     // Decrement Y Register
-    fn DEY(&mut self, bus: &mut bus::Bus) -> u8{
+    fn DEY(&mut self) -> u8{
         self.y -= 1;
         self.set_flag('Z', self.y == 0x00);
         self.set_flag('N', (self.y & 0x80) != 0);
@@ -615,21 +620,21 @@ impl CPU_6502{
         return 0;
     }
     // Increment X Register
-    fn INX(&mut self, bus: &mut bus::Bus) -> u8{
+    fn INX(&mut self) -> u8{
         self.x += 1;
         self.set_flag('Z', self.x == 0x00);
         self.set_flag('N', (self.x & 0x80) != 0);
         return 0;
     }
     // Increment Y Register
-    fn INY(&mut self, bus: &mut bus::Bus) -> u8{
+    fn INY(&mut self) -> u8{
         self.y += 1;
         self.set_flag('Z', self.y == 0x00);
         self.set_flag('N', (self.y & 0x80) != 0);
         return 0;
     }
     // Jump To Location
-    fn JMP(&mut self, bus: &mut bus::Bus) -> u8{
+    fn JMP(&mut self) -> u8{
         self.pc = self.addr_abs;
         return 0;
     }
@@ -685,7 +690,7 @@ impl CPU_6502{
         return 0;
     }
 
-    fn NOP(&mut self, bus: &mut bus::Bus) -> u8{
+    fn NOP(&mut self) -> u8{
         match self.opcode{
             0x1C|
             0x3C|
@@ -786,5 +791,74 @@ impl CPU_6502{
         self.pc += 1;
         return 0;
     }
-    
+    // Set Carry Flag
+    fn SEC(&mut self) -> u8{
+        self.set_flag('C', true);
+        return 0;
+    }
+    // Set Decimal Flag
+    fn SED(&mut self) -> u8{
+        self.set_flag('D', true);
+        return 0;
+    }
+    // Set Interrupt Flag
+    fn SEI(&mut self) -> u8{
+        self.set_flag('I', true);
+        return 0;
+    }
+    // Store Accumulator at Address
+    fn STA(&mut self, bus: &mut bus::Bus) -> u8{
+        self.write_this(bus, self.addr_abs, self.accum);
+        return 0;
+    }
+    // Store X Register at Address
+    fn STX(&mut self, bus: &mut bus::Bus) -> u8{
+        self.write_this(bus, self.addr_abs, self.x);
+        return 0;
+    }
+    // Store Y Register at Address
+    fn STY(&mut self, bus: &mut bus::Bus) -> u8{
+        self.write_this(bus, self.addr_abs, self.y);
+        return 0;
+    }
+    // Transfer Accumulator to X Register
+    fn TAX(&mut self) -> u8{
+        self.x = self.accum;
+        self.set_flag('Z', self.x == 0x00);
+        self.set_flag('N', (self.x & 0x80) != 0);
+        return 0;
+    }
+    // Transfer Accumulator to Y Register
+    fn TAY(&mut self) -> u8{
+        self.y = self.accum;
+        self.set_flag('Z', self.y == 0x00);
+        self.set_flag('N', (self.y & 0x80) != 0);
+        return 0;
+    }
+    // Transfer Stack Pointer to X Register
+    fn TSX(&mut self) -> u8{
+        self.x = self.stkp;
+        self.set_flag('Z', self.x == 0x00);
+        self.set_flag('N', (self.x & 0x80) != 0);
+        return 0;
+    }
+    // Transfer X Register to Accumulator
+    fn TXA(&mut self) -> u8{
+        self.accum = self.x;
+        self.set_flag('Z', self.x == 0x00);
+        self.set_flag('N', (self.x & 0x80) != 0);
+        return 0;
+    }
+    // Transfer X Register to Stack Pointer
+    fn TXS(&mut self) -> u8{
+        self.stkp = self.x;
+        return 0;
+    }
+    // Transfer X Register to Accumulator
+    fn TYA(&mut self) -> u8{
+        self.accum = self.y;
+        self.set_flag('Z', self.x == 0x00);
+        self.set_flag('N', (self.x & 0x80) != 0);
+        return 0;
+    }
 }

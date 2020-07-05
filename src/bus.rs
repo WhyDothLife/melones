@@ -5,7 +5,7 @@ pub struct Bus{
 
 impl Bus{
     pub fn new() -> Self{
-        let mut b = Bus{
+        let b = Bus{
             cpu_ram: [0; 2048],
             system_clock_counter: 0
         };
