@@ -6,16 +6,6 @@ use std::convert::TryInto;
 
 use crate::bus;
 
-// enum INSTRUCTION{
-//     name,
-//     operate,
-//     addrmode,
-// }
-
-// static lookup: vec!(INSTRUCTION) = {
-
-// }
-
 // This is copied from FCEU.
 static CYCLE_TABLE: [u8; 256] = [
     /*0x00*/ 7, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6, 
@@ -49,19 +39,9 @@ pub struct CPU_6502{
     addr_rel: u16,
     opcode: u8, // Instruction byte
     cycles: u8, // cycles remaining
-    clock_count: u32 // accumulation of the number of clocks
+    clock_count: u32, // accumulation of the number of clocks
+    bus: bus::Bus
 }
-
-// pub enum FLAGS_6502{
-//     C = (1 << 0),	// Carry Bit
-// 	Z = (1 << 1),	// Zero
-// 	I = (1 << 2),	// Disable Interrupts
-// 	D = (1 << 3),	// Decimal Mode (unused by NES)
-// 	B = (1 << 4),	// Break
-// 	U = (1 << 5),	// Unused
-// 	V = (1 << 6),	// Overflow
-// 	N = (1 << 7),	// Negative
-// }
 
 fn FLAGS_6502(c: char) -> u8{
     match c{
@@ -78,7 +58,7 @@ fn FLAGS_6502(c: char) -> u8{
 }
 
 impl CPU_6502{
-    pub fn new() -> Self{
+    pub fn new(xBus: bus::Bus) -> Self{
         let cpu = CPU_6502{
             accum: 0,
             x: 0,
@@ -92,17 +72,18 @@ impl CPU_6502{
             addr_rel: 0x00,
             opcode: 0x00,
             cycles: 0,
-            clock_count: 0
+            clock_count: 0,
+            bus: xBus
         };
         return cpu; 
     }
 
     // Read and write a byte to a specific memory address
-    fn read_this(&self, bus: &mut bus::Bus, a: u16) -> u8{
-        return bus.cpu_read(a);
+    fn read_this(&self, a: u16) -> u8{
+        return self.bus.cpu_read(a);
     }
-    fn write_this(&self, bus: &mut bus::Bus, a: u16, d: u8){
-        bus.cpu_write(a, d);
+    fn write_this(&mut self, a: u16, d: u8){
+        self.bus.cpu_write(a, d);
     }
 
     // Gets and sets flags for convienance
@@ -121,11 +102,11 @@ impl CPU_6502{
         }
     }
 
-    pub fn reset(&mut self, bus: &mut bus::Bus){
+    pub fn reset(&mut self){
         // Get address to set program counter
         self.addr_abs = 0xFFFC;
-        let lo: u16 = self.read_this(bus, self.addr_abs + 0).into();
-        let hi: u16 = self.read_this(bus, self.addr_abs + 1).into();
+        let lo: u16 = self.read_this(self.addr_abs + 0).into();
+        let hi: u16 = self.read_this(self.addr_abs + 1).into();
 
         // Set counter
         self.pc = (hi << 8) | lo;
@@ -146,25 +127,25 @@ impl CPU_6502{
     }
 
     // Interrupt Request - can be ignored
-    pub fn irq(&mut self, bus: &mut bus::Bus){
+    pub fn irq(&mut self){
         if self.get_flag('I') == 0{
             // Push program counter to the stack
-            self.write_this(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF).try_into().unwrap());
+            self.write_this(0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF).try_into().unwrap());
             self.stkp -= 1;
-            self.write_this(bus, 0x0100 + self.stkp as u16, (self.pc & 0x00FF).try_into().unwrap());
+            self.write_this(0x0100 + self.stkp as u16, (self.pc & 0x00FF).try_into().unwrap());
             self.stkp -= 1;
 
             // Push status register to the stack
             self.set_flag('B', false);
             self.set_flag('U', true);
             self.set_flag('I', true);
-            self.write_this(bus, 0x0100 + self.stkp as u16, self.status);
+            self.write_this(0x0100 + self.stkp as u16, self.status);
             self.stkp -= 1;
 
             // Read new program counter location
             self.addr_abs = 0xFFFE;
-            let lo: u16 = self.read_this(bus, self.addr_abs + 0).into();
-            let hi: u16 = self.read_this(bus, self.addr_abs + 1).into();
+            let lo: u16 = self.read_this(self.addr_abs + 0).into();
+            let hi: u16 = self.read_this(self.addr_abs + 1).into();
             self.pc = (hi << 8) | lo;
 
             self.cycles = 7;
@@ -172,21 +153,21 @@ impl CPU_6502{
     }
 
     // Non-Maskable Interrupt - cannot be ignored
-    pub fn nmi(&mut self, bus: &mut bus::Bus){
-        self.write_this(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF).try_into().unwrap());
+    pub fn nmi(&mut self){
+        self.write_this(0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF).try_into().unwrap());
         self.stkp -= 1;
-        self.write_this(bus, 0x0100 + self.stkp as u16, (self.pc & 0x00FF).try_into().unwrap());
+        self.write_this(0x0100 + self.stkp as u16, (self.pc & 0x00FF).try_into().unwrap());
         self.stkp -= 1;
 
         self.set_flag('B', false);
         self.set_flag('U', true);
         self.set_flag('I', true);
-        self.write_this(bus, 0x0100 + self.stkp as u16, self.status);
+        self.write_this(0x0100 + self.stkp as u16, self.status);
         self.stkp -= 1;
 
         self.addr_abs = 0xFFFA;
-        let lo: u16 = self.read_this(bus, self.addr_abs + 0).into();
-        let hi: u16 = self.read_this(bus, self.addr_abs + 1).into();
+        let lo: u16 = self.read_this(self.addr_abs + 0).into();
+        let hi: u16 = self.read_this(self.addr_abs + 1).into();
         self.pc = (hi << 8) | lo;
 
         self.cycles = 8;
@@ -198,39 +179,39 @@ impl CPU_6502{
      * 
      **********************************/
      // Implied
-     fn IMP(&mut self) -> u8{
+    fn IMP(&mut self) -> u8{
         self.fetched = self.accum;
         return 0;
      }
      // Immediate
-     fn IMM(&mut self) -> u8{
+    fn IMM(&mut self) -> u8{
         self.addr_abs = self.pc;
         self.pc += 1;
         return 0;
      }
      // Zero page
-     fn ZP0(&mut self, bus: &mut bus::Bus) -> u8{
-        self.addr_abs = self.read_this(bus, self.pc).into();
+    fn ZP0(&mut self) -> u8{
+        self.addr_abs = self.read_this(self.pc).into();
         self.pc += 1;
         self.addr_abs &= 0x00FF;
         return 0;
      }
      // Zero page with X offset
-     fn ZPX(&mut self, bus: &mut bus::Bus) -> u8{
-        self.addr_abs = (self.read_this(bus, self.pc) + self.x).into();
+    fn ZPX(&mut self) -> u8{
+        self.addr_abs = (self.read_this(self.pc) + self.x).into();
         self.pc += 1;
         self.addr_abs &= 0x00FF;
         return 0;
      }
      // Zero page with Y offset
-     fn ZPY(&mut self, bus: &mut bus::Bus) -> u8{
-        self.addr_abs = (self.read_this(bus, self.pc) + self.y).into();
+    fn ZPY(&mut self) -> u8{
+        self.addr_abs = (self.read_this(self.pc) + self.y).into();
         self.pc += 1;
         self.addr_abs &= 0x00FF;
         return 0;
      }
      // Relative
-     fn REL(&mut self) -> u8{
+    fn REL(&mut self) -> u8{
         self.addr_abs = self.pc;
         self.pc += 1;
         if self.addr_rel & 0x80 == 1{
@@ -239,10 +220,10 @@ impl CPU_6502{
         return 0;
      }
      // Absolute with X Offset
-     fn ABX(&mut self, bus: &mut bus::Bus) -> u8{
-        let lo: u16 = self.read_this(bus, self.pc) .into();
+    fn ABX(&mut self) -> u8{
+        let lo: u16 = self.read_this(self.pc) .into();
         self.pc += 1;
-        let hi: u16 = self.read_this(bus, self.pc) .into();
+        let hi: u16 = self.read_this(self.pc) .into();
         self.pc += 1;
         
         self.addr_abs = (hi << 8) | lo;
@@ -255,10 +236,10 @@ impl CPU_6502{
         }
      }
      // Absolute with Y offset
-     fn ABY(&mut self, bus: &mut bus::Bus) -> u8{
-        let lo: u16 = self.read_this(bus, self.pc) .into();
+    fn ABY(&mut self) -> u8{
+        let lo: u16 = self.read_this(self.pc) .into();
         self.pc += 1;
-        let hi: u16 = self.read_this(bus, self.pc) .into();
+        let hi: u16 = self.read_this(self.pc) .into();
         self.pc += 1;
         
         self.addr_abs = (hi << 8) | lo;
@@ -271,42 +252,42 @@ impl CPU_6502{
         }
      }
      // Indirect
-     fn IND(&mut self, bus: &mut bus::Bus) -> u8{
-        let ptr_lo: u16 = self.read_this(bus, self.pc) .into();
+    fn IND(&mut self) -> u8{
+        let ptr_lo: u16 = self.read_this(self.pc) .into();
         self.pc += 1;
-        let ptr_hi: u16 = self.read_this(bus, self.pc) .into();
+        let ptr_hi: u16 = self.read_this(self.pc) .into();
         self.pc += 1;
 
         let ptr: u16 = (ptr_hi << 8) | ptr_lo;
 
         // Bug in NES
         if ptr_lo == 0x00FF{ // Should be fine 
-            self.addr_abs = ((self.read_this(bus, ptr & 0xFF00) as u16) >> 8) | (self.read_this(bus, ptr + 0) as u16);
+            self.addr_abs = ((self.read_this(ptr & 0xFF00) as u16) >> 8) | (self.read_this(ptr + 0) as u16);
         }else{               // Should be fine
-            self.addr_abs = ((self.read_this(bus, ptr + 1) as u16) << 8) | (self.read_this(bus, ptr + 0) as u16);
+            self.addr_abs = ((self.read_this(ptr + 1) as u16) << 8) | (self.read_this(ptr + 0) as u16);
         }
 
         return 0;
      }
      // Indirect X
-     fn IZX(&mut self, bus: &mut bus::Bus) -> u8{
-        let t: u16 = self.read_this(bus, self.pc).into();
+    fn IZX(&mut self) -> u8{
+        let t: u16 = self.read_this(self.pc).into();
         self.pc += 1;
 
-        let lo: u16 = self.read_this(bus, (t + self.x as u16) & 0x00FF).into();
-        let hi: u16 = self.read_this(bus, (t + self.x as u16 + 1) & 0x00FF).into();
+        let lo: u16 = self.read_this((t + self.x as u16) & 0x00FF).into();
+        let hi: u16 = self.read_this((t + self.x as u16 + 1) & 0x00FF).into();
 
         self.addr_abs = (hi << 8) | lo;
 
         return 0;
-     }
+    }
      // Indirect Y
-     fn IZY(&mut self, bus: &mut bus::Bus) -> u8{
-        let t: u16 = self.read_this(bus, self.pc).into();
+    fn IZY(&mut self) -> u8{
+        let t: u16 = self.read_this(self.pc).into();
         self.pc += 1;
 
-        let lo: u16 = self.read_this(bus, t & 0x00FF).into();
-        let hi: u16 = self.read_this(bus, (t + 1) & 0x00FF).into();
+        let lo: u16 = self.read_this(t & 0x00FF).into();
+        let hi: u16 = self.read_this((t + 1) & 0x00FF).into();
 
         self.addr_abs = (hi << 8) | lo;
         self.addr_abs += self.y as u16;
@@ -316,16 +297,16 @@ impl CPU_6502{
         }else{
             return 0;
         }
-     }
+    }
     
      /**************
      DONT FORGET TO FINISH THIS
     *************************/
     // Fetches the data used by the instruction
-    fn fetch(&mut self, _bus: &mut bus::Bus) -> u8{
+    fn fetch(&mut self) -> u8{
         // ADD LATER
         // if addrmode_lookup[self.opcode] == &IMP{
-        //     self.fetched = self.read_this(bus, self.addr_abs);
+        //     self.fetched = self.read_this(self.addr_abs);
         // }
         return self.fetched;
     }
@@ -336,9 +317,9 @@ impl CPU_6502{
      * 
      **********************************/
     // Add with Carry In
-     fn ADC(&mut self, bus: &mut bus::Bus) -> u8{
+     fn ADC(&mut self) -> u8{
         // Grab data for accumulator
-        self.fetch(bus);
+        self.fetch();
 
         // Performed in 16 bit to capture a carry bit
         // This will exist in bit 8 of the 16 bit
@@ -357,8 +338,8 @@ impl CPU_6502{
         return 1;
     }
     // Subtraction with Borrow In
-    fn SBC(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn SBC(&mut self) -> u8{
+        self.fetch();
 
         let value: u16 = self.fetched as u16 ^ 0x00FF;
 
@@ -371,25 +352,25 @@ impl CPU_6502{
         return 1;
     }
     // Bitwise Logic AND
-    fn AND(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn AND(&mut self) -> u8{
+        self.fetch();
         self.accum &= self.fetched;
         self.set_flag('Z', self.accum == 0x00);
         self.set_flag('N', self.accum & 0x80 != 0);
         return 1;
     }
     // Arithmetic Shift Left
-    fn ASL(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn ASL(&mut self) -> u8{
+        self.fetch();
         self.temp = (self.fetched << 1) as u16;
         self.set_flag('C', (self.temp & 0xFF00) > 0);
         self.set_flag('Z', (self.temp & 0x00FF) == 0x00);
         self.set_flag('N', (self.temp & 0x80) != 0);
         // ADD LATER
         // if addrmode_lookup[self.opcode] == &IMP{
-        //     self.fetched = self.read_this(bus, self.addr_abs);
+        //     self.fetched = self.read_this(self.addr_abs);
         // }else{
-        //     self.write_this(bus, self.addr_abs, self.temp & 0x00FF);
+        //     self.write_this(self.addr_abs, self.temp & 0x00FF);
         // }
         return 0;
     }
@@ -436,8 +417,8 @@ impl CPU_6502{
         return 0;
     }
     // 
-    fn BIT(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn BIT(&mut self) -> u8{
+        self.fetch();
         self.temp = (self.accum & self.fetched) as u16;
         self.set_flag('Z', (self.temp & 0x00FF) == 0x00);
         self.set_flag('N', (self.fetched & (1 << 7)) != 0);
@@ -487,21 +468,21 @@ impl CPU_6502{
         return 0;
     }
     // Break
-    fn BRK(&mut self, bus: &mut bus::Bus) -> u8{
+    fn BRK(&mut self) -> u8{
         self.pc += 1;
 
         self.set_flag('I', true);
-        self.write_this(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
+        self.write_this(0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
         self.stkp -= 1;
-        self.write_this(bus, 0x0100 + self.stkp as u16, (self.pc & 0x00FF) as u8);
+        self.write_this(0x0100 + self.stkp as u16, (self.pc & 0x00FF) as u8);
         self.stkp -= 1;
 
         self.set_flag('B', true);
-        self.write_this(bus, 0x0100 + self.stkp as u16, self.status);
+        self.write_this(0x0100 + self.stkp as u16, self.status);
         self.stkp -= 1;
         self.set_flag('B', false);
 
-        self.pc = (self.read_this(bus, 0xFFFE) | ((self.read_this(bus, 0xFFFF) as u16) << 8) as u8) as u16;
+        self.pc = (self.read_this(0xFFFE) | ((self.read_this(0xFFFF) as u16) << 8) as u8) as u16;
         return 0;
     }
     // Branch if Overflow Clear
@@ -553,8 +534,8 @@ impl CPU_6502{
         return 0;
     }
     // Compare Accumulator
-    fn CMP(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn CMP(&mut self) -> u8{
+        self.fetch();
         self.temp = (self.accum - self.fetched) as u16;
         self.set_flag('C', self.accum >= self.fetched);
         self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
@@ -562,8 +543,8 @@ impl CPU_6502{
         return 1;
     }
     // Compare X Register
-    fn CPX(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn CPX(&mut self) -> u8{
+        self.fetch();
         self.temp = (self.x - self.fetched) as u16;
         self.set_flag('C', self.x >= self.fetched);
         self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
@@ -571,8 +552,8 @@ impl CPU_6502{
         return 0;
     }
     // Compare Y Register
-    fn CPY(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn CPY(&mut self) -> u8{
+        self.fetch();
         self.temp = (self.y - self.fetched) as u16;
         self.set_flag('C', self.y >= self.fetched);
         self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
@@ -580,10 +561,10 @@ impl CPU_6502{
         return 1;
     }
     // Decrement Value at Memory Location
-    fn DEC(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn DEC(&mut self) -> u8{
+        self.fetch();
         self.temp = (self.fetched - 1) as u16;
-        self.write_this(bus, self.addr_abs, (self.temp & 0x00FF) as u8);
+        self.write_this(self.addr_abs, (self.temp & 0x00FF) as u8);
         self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
         self.set_flag('N', (self.temp & 0x0080) != 0);
         return 1;
@@ -603,18 +584,18 @@ impl CPU_6502{
         return 0;
     }
     // Bitwise Logic XOR
-    fn EOR(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn EOR(&mut self) -> u8{
+        self.fetch();
         self.accum = self.accum ^ self.fetched;
         self.set_flag('Z', self.accum == 0x00);
         self.set_flag('N', (self.accum & 0x80) != 0);
         return 1;
     }
     // Increment Value at Memory Location
-    fn INC(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn INC(&mut self) -> u8{
+        self.fetch();
         self.temp = (self.fetched + 1) as u16;
-        self.write_this(bus, self.addr_abs, (self.temp & 0x00FF) as u8);
+        self.write_this(self.addr_abs, (self.temp & 0x00FF) as u8);
         self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
         self.set_flag('N', (self.temp& 0x0080) != 0);
         return 0;
@@ -639,44 +620,44 @@ impl CPU_6502{
         return 0;
     }
     // Jump To Location
-    fn JSR(&mut self, bus: &mut bus::Bus) -> u8{
+    fn JSR(&mut self) -> u8{
         self.pc -= 1;
 
-        self.write_this(bus, 0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
+        self.write_this(0x0100 + self.stkp as u16, ((self.pc >> 8) & 0x00FF) as u8);
         self.stkp -= 1;
-        self.write_this(bus, 0x0100 + self.stkp as u16, (self.pc & 0x00FF) as u8);
+        self.write_this(0x0100 + self.stkp as u16, (self.pc & 0x00FF) as u8);
         self.stkp -= 1;
 
         self.pc = self.addr_abs;
         return 0;
     }
     // Load The Accumulator
-    fn LDA(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn LDA(&mut self) -> u8{
+        self.fetch();
         self.accum = self.fetched;
         self.set_flag('Z', self.accum == 0x00);
         self.set_flag('N', (self.accum & 0x80) != 0);
         return 1;
     }
     // Load The X Register
-    fn LDX(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn LDX(&mut self) -> u8{
+        self.fetch();
         self.x = self.fetched;
         self.set_flag('Z', self.x == 0x00);
         self.set_flag('N', (self.x & 0x80) != 0);
         return 1;
     }
     // Load The Y Register
-    fn LDY(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn LDY(&mut self) -> u8{
+        self.fetch();
         self.y = self.fetched;
         self.set_flag('Z', self.y == 0x00);
         self.set_flag('N', (self.y & 0x80) != 0);
         return 1;
     }
     
-    fn LSR(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn LSR(&mut self) -> u8{
+        self.fetch();
         self.set_flag('C', (self.fetched & 0x0001) != 0);
         self.temp = (self.fetched >> 1) as u16;
         self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
@@ -685,7 +666,7 @@ impl CPU_6502{
         // if addrmode_lookup[self.opcode] == &IMP{
         //     self.accum = self.temp & 0x00FF;
         // }else{
-        //     self.write_this(bus, self.addr_abs, (self.temp & 0x00FF) as u8);
+        //     self.write_this(self.addr_abs, (self.temp & 0x00FF) as u8);
         // }
         return 0;
     }
@@ -702,45 +683,45 @@ impl CPU_6502{
         }
     }
     // Bitwise Logic OR
-    fn ORA(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn ORA(&mut self) -> u8{
+        self.fetch();
         self.accum = self.accum | self.fetched;
         self.set_flag('Z', self.accum == 0x00);
         self.set_flag('N', (self.accum & 0x80) != 0);
         return 1;
     }
     // Push Accumulator to Stack
-    fn PHA(&mut self, bus: &mut bus::Bus) -> u8{
-        self.write_this(bus, 0x0100 + self.stkp as u16, self.accum);
+    fn PHA(&mut self) -> u8{
+        self.write_this(0x0100 + self.stkp as u16, self.accum);
         self.stkp -= 1;
         return 0;
     }
     // Push Status Register to Stack
-    fn PHP(&mut self, bus: &mut bus::Bus) -> u8{
-        self.write_this(bus, 0x0100 + self.stkp as u16, self.status | FLAGS_6502('B') | FLAGS_6502('U'));
+    fn PHP(&mut self) -> u8{
+        self.write_this(0x0100 + self.stkp as u16, self.status | FLAGS_6502('B') | FLAGS_6502('U'));
         self.set_flag('B', false);
         self.set_flag('U', false);
         self.stkp -= 1;
         return 0;
     }
     // Pop Accumulator off Stack
-    fn PLA(&mut self, bus: &mut bus::Bus) -> u8{
+    fn PLA(&mut self) -> u8{
         self.stkp += 1;
-        self.accum = self.read_this(bus, 0x0100 + self.stkp as u16);
+        self.accum = self.read_this(0x0100 + self.stkp as u16);
         self.set_flag('Z', self.accum == 0x00);
         self.set_flag('N', (self.accum & 0x80) != 0);
         return 0;
     }
     // Pop Status Register off Stack
-    fn PLP(&mut self, bus: &mut bus::Bus) -> u8{
+    fn PLP(&mut self) -> u8{
         self.stkp += 1;
-        self.status = self.read_this(bus, 0x0100 + self.stkp as u16);
+        self.status = self.read_this(0x0100 + self.stkp as u16);
         self.set_flag('U', true);
         return 0;
     }
 
-    fn ROL(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn ROL(&mut self) -> u8{
+        self.fetch();
         self.temp = ((self.fetched << 1) | self.get_flag('C')) as u16;
         self.set_flag('C', (self.temp & 0xFF00) != 0);
         self.set_flag('Z', (self.temp & 0x00FF) == 0x0000);
@@ -749,13 +730,13 @@ impl CPU_6502{
         // if addrmode_lookup[self.opcode] == &IMP{
         //     self.accum = (self.temp & 0x00FF) as u8;
         // }else{
-        //     self.write_this(bus, self.addr_abs, (self.temp & 0x00FF) as u8);
+        //     self.write_this(self.addr_abs, (self.temp & 0x00FF) as u8);
         // }
         return 0;
     }
 
-    fn ROR(&mut self, bus: &mut bus::Bus) -> u8{
-        self.fetch(bus);
+    fn ROR(&mut self) -> u8{
+        self.fetch();
         self.temp = ((self.get_flag('C') << 7) | (self.fetched >> 1)) as u16;
         self.set_flag('C', (self.fetched & 0x01) != 0);
         self.set_flag('Z', (self.temp & 0x00FF) == 0x00);
@@ -764,29 +745,29 @@ impl CPU_6502{
         // if addrmode_lookup[self.opcode] == &IMP{
         //     self.accum = (self.temp & 0x00FF) as u8;
         // }else{
-        //     self.write_this(bus, self.addr_abs, (self.temp & 0x00FF) as u8);
+        //     self.write_this(self.addr_abs, (self.temp & 0x00FF) as u8);
         // }
         return 0;
     }
 
-    fn RTI(&mut self, bus: &mut bus::Bus) -> u8{
+    fn RTI(&mut self) -> u8{
         self.stkp += 1;
-        self.status = self.read_this(bus, 0x0100 + self.stkp as u16);
+        self.status = self.read_this(0x0100 + self.stkp as u16);
         self.status &= !FLAGS_6502('B');
         self.status &= !FLAGS_6502('U');
 
         self.stkp += 1;
-        self.pc = self.read_this(bus, 0x0100 + self.stkp as u16) as u16;
+        self.pc = self.read_this(0x0100 + self.stkp as u16) as u16;
         self.stkp += 1;
-        self.pc |= self.read_this(bus, (0x0100 + self.stkp as u16) << 8) as u16;
+        self.pc |= self.read_this((0x0100 + self.stkp as u16) << 8) as u16;
         return 0;
     }
 
-    fn RTS(&mut self, bus: &mut bus::Bus) -> u8{
+    fn RTS(&mut self) -> u8{
         self.stkp += 1;
-        self.pc = self.read_this(bus, 0x0100 + self.stkp as u16) as u16;
+        self.pc = self.read_this(0x0100 + self.stkp as u16) as u16;
         self.stkp += 1;
-        self.pc |= self.read_this(bus, (0x0100 + self.stkp as u16) << 8) as u16;
+        self.pc |= self.read_this((0x0100 + self.stkp as u16) << 8) as u16;
 
         self.pc += 1;
         return 0;
@@ -807,18 +788,18 @@ impl CPU_6502{
         return 0;
     }
     // Store Accumulator at Address
-    fn STA(&mut self, bus: &mut bus::Bus) -> u8{
-        self.write_this(bus, self.addr_abs, self.accum);
+    fn STA(&mut self) -> u8{
+        self.write_this(self.addr_abs, self.accum);
         return 0;
     }
     // Store X Register at Address
-    fn STX(&mut self, bus: &mut bus::Bus) -> u8{
-        self.write_this(bus, self.addr_abs, self.x);
+    fn STX(&mut self) -> u8{
+        self.write_this(self.addr_abs, self.x);
         return 0;
     }
     // Store Y Register at Address
-    fn STY(&mut self, bus: &mut bus::Bus) -> u8{
-        self.write_this(bus, self.addr_abs, self.y);
+    fn STY(&mut self) -> u8{
+        self.write_this(self.addr_abs, self.y);
         return 0;
     }
     // Transfer Accumulator to X Register
@@ -861,4 +842,70 @@ impl CPU_6502{
         self.set_flag('N', (self.x & 0x80) != 0);
         return 0;
     }
+
+    /**********************************
+     * 
+     * Illegal Opcodes
+     * 
+     **********************************/
+    // Add later
 }
+
+// Sets up opcodes and cycles in a 16x16 array
+// Will clean up later
+#[derive(Copy, Clone)]
+enum Operation{
+    ADC, AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, BRK, BVC, BVS, CLC, CLD, CLI, CLV, CMP, CPX,
+    CPY, DEC, DEX, DEY, EOR, INC, INX, INY, JMP, JSR, LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA,
+    PLP, ROL, ROR, RTI, RTS, SBC, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TXS, TYA,
+    // "Illegal" instructions
+    SKB, IGN, ISB, DCP, AXS, LAS, LAX, AHX, SAX, XAA, SXA, RRA, TAS, SYA, ARR, SRE, ALR, RLA, ANC,
+    SLO,
+    // Catches invalid instructions
+    XXX
+}
+#[derive(Copy, Clone)]
+enum AddrMode{
+    IMM, ZP0, 
+    ZPX, ZPY,
+    ABS, ABX, 
+    ABY, IND, 
+    IDX, IDY,
+    REL, ACC, 
+    IMP
+}
+use Operation::*;
+use AddrMode::*;
+struct Instruction(u8, AddrMode, Operation, u8);
+impl Instruction {
+    pub fn opcode(&self) -> u8 {
+        self.0
+    }
+    pub fn addr_mode(&self) -> AddrMode {
+        self.1
+    }
+    pub fn oper(&self) -> Operation {
+        self.2
+    }
+    pub fn cycles(&self) -> u8 {
+        self.3
+    }
+}
+const INSTRUCTIONS: [Instruction; 256] = [
+    Instruction(0x00, IMM, BRK, 7), Instruction(0x01, IDX, ORA, 6), Instruction(0x02, IMP, XXX, 2), Instruction(0x03, IDX, SLO, 8), Instruction(0x04, ZP0, NOP, 3), Instruction(0x05, ZP0, ORA, 3), Instruction(0x06, ZP0, ASL, 5), Instruction(0x07, ZP0, SLO, 5), Instruction(0x08, IMP, PHP, 3), Instruction(0x09, IMM, ORA, 2), Instruction(0x0A, ACC, ASL, 2), Instruction(0x0B, IMM, ANC, 2), Instruction(0x0C, ABS, NOP, 4), Instruction(0x0D, ABS, ORA, 4), Instruction(0x0E, ABS, ASL, 6), Instruction(0x0F, ABS, SLO, 6),
+    Instruction(0x10, REL, BPL, 2), Instruction(0x11, IDY, ORA, 5), Instruction(0x12, IMP, XXX, 2), Instruction(0x13, IDY, SLO, 8), Instruction(0x14, ZPX, NOP, 4), Instruction(0x15, ZPX, ORA, 4), Instruction(0x16, ZPX, ASL, 6), Instruction(0x17, ZPX, SLO, 6), Instruction(0x18, IMP, CLC, 2), Instruction(0x19, ABY, ORA, 4), Instruction(0x1A, IMP, NOP, 2), Instruction(0x1B, ABY, SLO, 7), Instruction(0x1C, ABX, IGN, 4), Instruction(0x1D, ABX, ORA, 4), Instruction(0x1E, ABX, ASL, 7), Instruction(0x1F, ABX, SLO, 7),
+    Instruction(0x20, ABS, JSR, 6), Instruction(0x21, IDX, AND, 6), Instruction(0x22, IMP, XXX, 2), Instruction(0x23, IDX, RLA, 8), Instruction(0x24, ZP0, BIT, 3), Instruction(0x25, ZP0, AND, 3), Instruction(0x26, ZP0, ROL, 5), Instruction(0x27, ZP0, RLA, 5), Instruction(0x28, IMP, PLP, 4), Instruction(0x29, IMM, AND, 2), Instruction(0x2A, ACC, ROL, 2), Instruction(0x2B, IMM, ANC, 2), Instruction(0x2C, ABS, BIT, 4), Instruction(0x2D, ABS, AND, 4), Instruction(0x2E, ABS, ROL, 6), Instruction(0x2F, ABS, RLA, 6),
+    Instruction(0x30, REL, BMI, 2), Instruction(0x31, IDY, AND, 5), Instruction(0x32, IMP, XXX, 2), Instruction(0x33, IDY, RLA, 8), Instruction(0x34, ZPX, NOP, 4), Instruction(0x35, ZPX, AND, 4), Instruction(0x36, ZPX, ROL, 6), Instruction(0x37, ZPX, RLA, 6), Instruction(0x38, IMP, SEC, 2), Instruction(0x39, ABY, AND, 4), Instruction(0x3A, IMP, NOP, 2), Instruction(0x3B, ABY, RLA, 7), Instruction(0x3C, ABX, IGN, 4), Instruction(0x3D, ABX, AND, 4), Instruction(0x3E, ABX, ROL, 7), Instruction(0x3F, ABX, RLA, 7),
+    Instruction(0x40, IMP, RTI, 6), Instruction(0x41, IDX, EOR, 6), Instruction(0x42, IMP, XXX, 2), Instruction(0x43, IDX, SRE, 8), Instruction(0x44, ZP0, NOP, 3), Instruction(0x45, ZP0, EOR, 3), Instruction(0x46, ZP0, LSR, 5), Instruction(0x47, ZP0, SRE, 5), Instruction(0x48, IMP, PHA, 3), Instruction(0x49, IMM, EOR, 2), Instruction(0x4A, ACC, LSR, 2), Instruction(0x4B, IMM, ALR, 2), Instruction(0x4C, ABS, JMP, 3), Instruction(0x4D, ABS, EOR, 4), Instruction(0x4E, ABS, LSR, 6), Instruction(0x4F, ABS, SRE, 6),
+    Instruction(0x50, REL, BVC, 2), Instruction(0x51, IDY, EOR, 5), Instruction(0x52, IMP, XXX, 2), Instruction(0x53, IDY, SRE, 8), Instruction(0x54, ZPX, NOP, 4), Instruction(0x55, ZPX, EOR, 4), Instruction(0x56, ZPX, LSR, 6), Instruction(0x57, ZPX, SRE, 6), Instruction(0x58, IMP, CLI, 2), Instruction(0x59, ABY, EOR, 4), Instruction(0x5A, IMP, NOP, 2), Instruction(0x5B, ABY, SRE, 7), Instruction(0x5C, ABX, IGN, 4), Instruction(0x5D, ABX, EOR, 4), Instruction(0x5E, ABX, LSR, 7), Instruction(0x5F, ABX, SRE, 7),
+    Instruction(0x60, IMP, RTS, 6), Instruction(0x61, IDX, ADC, 6), Instruction(0x62, IMP, XXX, 2), Instruction(0x63, IDX, RRA, 8), Instruction(0x64, ZP0, NOP, 3), Instruction(0x65, ZP0, ADC, 3), Instruction(0x66, ZP0, ROR, 5), Instruction(0x67, ZP0, RRA, 5), Instruction(0x68, IMP, PLA, 4), Instruction(0x69, IMM, ADC, 2), Instruction(0x6A, ACC, ROR, 2), Instruction(0x6B, IMM, ARR, 2), Instruction(0x6C, IND, JMP, 5), Instruction(0x6D, ABS, ADC, 4), Instruction(0x6E, ABS, ROR, 6), Instruction(0x6F, ABS, RRA, 6),
+    Instruction(0x70, REL, BVS, 2), Instruction(0x71, IDY, ADC, 5), Instruction(0x72, IMP, XXX, 2), Instruction(0x73, IDY, RRA, 8), Instruction(0x74, ZPX, NOP, 4), Instruction(0x75, ZPX, ADC, 4), Instruction(0x76, ZPX, ROR, 6), Instruction(0x77, ZPX, RRA, 6), Instruction(0x78, IMP, SEI, 2), Instruction(0x79, ABY, ADC, 4), Instruction(0x7A, IMP, NOP, 2), Instruction(0x7B, ABY, RRA, 7), Instruction(0x7C, ABX, IGN, 4), Instruction(0x7D, ABX, ADC, 4), Instruction(0x7E, ABX, ROR, 7), Instruction(0x7F, ABX, RRA, 7),
+    Instruction(0x80, IMM, SKB, 2), Instruction(0x81, IDX, STA, 6), Instruction(0x82, IMM, SKB, 2), Instruction(0x83, IDX, SAX, 6), Instruction(0x84, ZP0, STY, 3), Instruction(0x85, ZP0, STA, 3), Instruction(0x86, ZP0, STX, 3), Instruction(0x87, ZP0, SAX, 3), Instruction(0x88, IMP, DEY, 2), Instruction(0x89, IMM, SKB, 2), Instruction(0x8A, IMP, TXA, 2), Instruction(0x8B, IMM, XAA, 2), Instruction(0x8C, ABS, STY, 4), Instruction(0x8D, ABS, STA, 4), Instruction(0x8E, ABS, STX, 4), Instruction(0x8F, ABS, SAX, 4),
+    Instruction(0x90, REL, BCC, 2), Instruction(0x91, IDY, STA, 6), Instruction(0x92, IMP, XXX, 2), Instruction(0x93, IDY, AHX, 6), Instruction(0x94, ZPX, STY, 4), Instruction(0x95, ZPX, STA, 4), Instruction(0x96, ZPY, STX, 4), Instruction(0x97, ZPY, SAX, 4), Instruction(0x98, IMP, TYA, 2), Instruction(0x99, ABY, STA, 5), Instruction(0x9A, IMP, TXS, 2), Instruction(0x9B, ABY, TAS, 5), Instruction(0x9C, ABX, SYA, 5), Instruction(0x9D, ABX, STA, 5), Instruction(0x9E, ABY, SXA, 5), Instruction(0x9F, ABY, AHX, 5),
+    Instruction(0xA0, IMM, LDY, 2), Instruction(0xA1, IDX, LDA, 6), Instruction(0xA2, IMM, LDX, 2), Instruction(0xA3, IDX, LAX, 6), Instruction(0xA4, ZP0, LDY, 3), Instruction(0xA5, ZP0, LDA, 3), Instruction(0xA6, ZP0, LDX, 3), Instruction(0xA7, ZP0, LAX, 3), Instruction(0xA8, IMP, TAY, 2), Instruction(0xA9, IMM, LDA, 2), Instruction(0xAA, IMP, TAX, 2), Instruction(0xAB, IMM, LAX, 2), Instruction(0xAC, ABS, LDY, 4), Instruction(0xAD, ABS, LDA, 4), Instruction(0xAE, ABS, LDX, 4), Instruction(0xAF, ABS, LAX, 4),
+    Instruction(0xB0, REL, BCS, 2), Instruction(0xB1, IDY, LDA, 5), Instruction(0xB2, IMP, XXX, 2), Instruction(0xB3, IDY, LAX, 5), Instruction(0xB4, ZPX, LDY, 4), Instruction(0xB5, ZPX, LDA, 4), Instruction(0xB6, ZPY, LDX, 4), Instruction(0xB7, ZPY, LAX, 4), Instruction(0xB8, IMP, CLV, 2), Instruction(0xB9, ABY, LDA, 4), Instruction(0xBA, IMP, TSX, 2), Instruction(0xBB, ABY, LAS, 4), Instruction(0xBC, ABX, LDY, 4), Instruction(0xBD, ABX, LDA, 4), Instruction(0xBE, ABY, LDX, 4), Instruction(0xBF, ABY, LAX, 4),
+    Instruction(0xC0, IMM, CPY, 2), Instruction(0xC1, IDX, CMP, 6), Instruction(0xC2, IMM, SKB, 2), Instruction(0xC3, IDX, DCP, 8), Instruction(0xC4, ZP0, CPY, 3), Instruction(0xC5, ZP0, CMP, 3), Instruction(0xC6, ZP0, DEC, 5), Instruction(0xC7, ZP0, DCP, 5), Instruction(0xC8, IMP, INY, 2), Instruction(0xC9, IMM, CMP, 2), Instruction(0xCA, IMP, DEX, 2), Instruction(0xCB, IMM, AXS, 2), Instruction(0xCC, ABS, CPY, 4), Instruction(0xCD, ABS, CMP, 4), Instruction(0xCE, ABS, DEC, 6), Instruction(0xCF, ABS, DCP, 6),
+    Instruction(0xD0, REL, BNE, 2), Instruction(0xD1, IDY, CMP, 5), Instruction(0xD2, IMP, XXX, 2), Instruction(0xD3, IDY, DCP, 8), Instruction(0xD4, ZPX, NOP, 4), Instruction(0xD5, ZPX, CMP, 4), Instruction(0xD6, ZPX, DEC, 6), Instruction(0xD7, ZPX, DCP, 6), Instruction(0xD8, IMP, CLD, 2), Instruction(0xD9, ABY, CMP, 4), Instruction(0xDA, IMP, NOP, 2), Instruction(0xDB, ABY, DCP, 7), Instruction(0xDC, ABX, IGN, 4), Instruction(0xDD, ABX, CMP, 4), Instruction(0xDE, ABX, DEC, 7), Instruction(0xDF, ABX, DCP, 7),
+    Instruction(0xE0, IMM, CPX, 2), Instruction(0xE1, IDX, SBC, 6), Instruction(0xE2, IMM, SKB, 2), Instruction(0xE3, IDX, ISB, 8), Instruction(0xE4, ZP0, CPX, 3), Instruction(0xE5, ZP0, SBC, 3), Instruction(0xE6, ZP0, INC, 5), Instruction(0xE7, ZP0, ISB, 5), Instruction(0xE8, IMP, INX, 2), Instruction(0xE9, IMM, SBC, 2), Instruction(0xEA, IMP, NOP, 2), Instruction(0xEB, IMM, SBC, 2), Instruction(0xEC, ABS, CPX, 4), Instruction(0xED, ABS, SBC, 4), Instruction(0xEE, ABS, INC, 6), Instruction(0xEF, ABS, ISB, 6),
+    Instruction(0xF0, REL, BEQ, 2), Instruction(0xF1, IDY, SBC, 5), Instruction(0xF2, IMP, XXX, 2), Instruction(0xF3, IDY, ISB, 8), Instruction(0xF4, ZPX, NOP, 4), Instruction(0xF5, ZPX, SBC, 4), Instruction(0xF6, ZPX, INC, 6), Instruction(0xF7, ZPX, ISB, 6), Instruction(0xF8, IMP, SED, 2), Instruction(0xF9, ABY, SBC, 4), Instruction(0xFA, IMP, NOP, 2), Instruction(0xFB, ABY, ISB, 7), Instruction(0xFC, ABX, IGN, 4), Instruction(0xFD, ABX, SBC, 4), Instruction(0xFE, ABX, INC, 7), Instruction(0xFF, ABX, ISB, 7),
+];
